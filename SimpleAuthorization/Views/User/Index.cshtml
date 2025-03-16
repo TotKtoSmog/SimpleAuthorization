@@ -1,6 +1,6 @@
-﻿@model IEnumerable<SimpleAuthorization.Models.User>
+﻿@model SimpleAuthorization.Models.User
 @{
-    ViewData["Title"] = "Пользователи";
+    ViewData["Title"] = $"{Model.Email}";
 }
 <table class="table table-info">
 
@@ -14,19 +14,14 @@
             <th>email</th>
             <th>Пароль</th>
         </tr>
-        @foreach (var mes in Model)
-        {
-            
-            <tr>
-                <td>@mes.Id</td>
-                <td>@mes.Fname</td>
-                <td>@mes.Lname</td>
-                <td>@mes.City</td>
-                <td>@mes.Phone</td>
-                <td>@mes.Email</td>
-                <td>@mes.PasswordHash</td>
-            </tr>
-        }
+        <tr>
+            <td>@Model.Id</td>
+            <td>@Model.Fname</td>
+            <td>@Model.Lname</td>
+            <td>@Model.City</td>
+            <td>@Model.Phone</td>
+            <td>@Model.Email</td>
+            <td>@Model.PasswordHash</td>
+        </tr>
     </tbody>
-    <caption>>:^) Всего: @Model.Count()</caption>
 </table>

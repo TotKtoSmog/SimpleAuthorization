@@ -33,6 +33,27 @@ namespace SimpleAuthorization
 
             app.UseAuthorization();
 
+            // Настройка маршрутов
+            app.MapControllerRoute(
+                name: "userRegistration",
+                pattern: "User/Registration",
+                defaults: new { controller = "User", action = "Registration" });
+
+            app.MapControllerRoute(
+                name: "userAuthorization",
+                pattern: "User/Authorization",
+                defaults: new { controller = "User", action = "Authorization" });
+
+            app.MapControllerRoute(
+                name: "userAllUsers",
+                pattern: "User/AllUsers",
+                defaults: new { controller = "User", action = "AllUsers" });
+
+            app.MapControllerRoute(
+                name: "userProfile",
+                pattern: "User/{id}",
+                defaults: new { controller = "User", action = "Index" });
+
             app.MapControllerRoute(
                 name: "default",
                 pattern: "{controller=Home}/{action=Index}/{id?}");
