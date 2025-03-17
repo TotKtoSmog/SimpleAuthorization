@@ -11,10 +11,10 @@ namespace SimpleAuthorization
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
-
+            
             // Add services to the container.
             builder.Services.AddControllersWithViews();
-
+            
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
             options.UseNpgsql(
                 builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -36,12 +36,20 @@ namespace SimpleAuthorization
                     ValidAudience = jwtSettings["Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]))
                 };
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        if (context.Request.Cookies.ContainsKey("jwt_token"))
+                        {
+                            context.Token = context.Request.Cookies["jwt_token"];
+                        }
+                        return Task.CompletedTask;
+                    }
+                };
             });
-
-            builder.Services.AddAuthentication();
-
             var app = builder.Build();
-
+            
             // Configure the HTTP request pipeline.
             if (!app.Environment.IsDevelopment())
             {
@@ -55,6 +63,7 @@ namespace SimpleAuthorization
 
             app.UseRouting();
 
+            app.UseAuthentication();
             app.UseAuthorization();
 
             // Настройка маршрутов

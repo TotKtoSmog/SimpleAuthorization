@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SimpleAuthorization.Models;
@@ -16,12 +17,26 @@ namespace SimpleAuthorization.Controllers
         {
             _context = context;
             _configuration = configuration;
-        } 
-        public async Task<IActionResult> Index(int id)
+        }
+
+        [Authorize]
+        public async Task<IActionResult> Index()
         {
-            User? u = await _context.Users.FirstOrDefaultAsync(n => n.Id == id);
-            if (id == 0 || u == null) return RedirectToAction("AllUsers");
-            return View(u);
+            var email = User.FindFirst(ClaimTypes.Email)?.Value;
+
+            if (string.IsNullOrEmpty(email))
+            {
+                return Unauthorized();
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(n => n.Email == email);
+
+            if (user == null)
+            {
+                return RedirectToAction("AllUsers");
+            }
+
+            return View(user);
         }
 
         public async Task<IActionResult> AllUsers()
@@ -59,11 +74,18 @@ namespace SimpleAuthorization.Controllers
         {
             User? u = await _context.Users.FirstOrDefaultAsync(n => n.Email == user.Login);
 
-            if (u == null) return View(user);
-            else if (VerifyPassword(user.Password, u.PasswordHash))
-                return RedirectToAction("Index", new { id = u.Id });
-            return View(user);
+            if (u != null && VerifyPassword(user.Password, u.PasswordHash))
+            {
+                var token = GenerateJwtToken(u.Email, "user");
 
+                Response.Cookies.Append("jwt_token", token, new CookieOptions
+                {
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.Now.AddMinutes(Convert.ToDouble(_configuration["JwtSettings:ExpireMinutes"]))
+                });
+                return RedirectToAction("Index", new { id = u.Id });  
+            }
+            else return Unauthorized("Invalid password");
         }
 
         public string HashPassword(string password) 
@@ -78,7 +100,7 @@ namespace SimpleAuthorization.Controllers
             SigningCredentials credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
             Claim[] claims = new[]
             {
-                new Claim(ClaimTypes.Name, username),
+                new Claim(ClaimTypes.Email, username), // Используем ClaimTypes.Email
                 new Claim(ClaimTypes.Role, role)
             };
             var token = new JwtSecurityToken(
