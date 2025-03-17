@@ -1,13 +1,22 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using SimpleAuthorization.Models;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace SimpleAuthorization.Controllers
 {
     public class UserController : Controller
     {
         private readonly ApplicationDbContext _context;
-        public UserController(ApplicationDbContext context) => _context = context;
+        private readonly IConfiguration _configuration;
+        public UserController(ApplicationDbContext context, IConfiguration configuration)
+        {
+            _context = context;
+            _configuration = configuration;
+        } 
         public async Task<IActionResult> Index(int id)
         {
             User? u = await _context.Users.FirstOrDefaultAsync(n => n.Id == id);
@@ -62,5 +71,24 @@ namespace SimpleAuthorization.Controllers
 
         public bool VerifyPassword(string password, string hashedPassword) 
             => BCrypt.Net.BCrypt.Verify(password, hashedPassword);
+    
+        public string GenerateJwtToken(string username, string role)
+        {
+            SecurityKey securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"]));
+            SigningCredentials credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+            Claim[] claims = new[]
+            {
+                new Claim(ClaimTypes.Name, username),
+                new Claim(ClaimTypes.Role, role)
+            };
+            var token = new JwtSecurityToken(
+                issuer: _configuration["JwtSettings:Issuer"],
+                audience: _configuration["JwtSettings:Audience"],
+                claims: claims,
+                expires: DateTime.Now.AddMinutes(Convert.ToDouble(_configuration["JwtSettings:ExpireMinutes"])),
+                signingCredentials: credentials
+                );
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
     }
 }
