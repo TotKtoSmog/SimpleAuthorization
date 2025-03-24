@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using SimpleAuthorization.Models;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using SimpleAuthorization.Service.Interface;
+using SimpleAuthorization.Service;
 
 namespace SimpleAuthorization
 {
@@ -48,6 +50,9 @@ namespace SimpleAuthorization
                     }
                 };
             });
+            builder.Services.AddScoped<IUserService, UserService>();
+            builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
+            builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
             var app = builder.Build();
             
             // Configure the HTTP request pipeline.

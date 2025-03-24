@@ -1,68 +1,45 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using SimpleAuthorization.Models;
-using System.IdentityModel.Tokens.Jwt;
+using SimpleAuthorization.Service.Interface;
 using System.Security.Claims;
-using System.Text;
 
 namespace SimpleAuthorization.Controllers
 {
     public class UserController : Controller
     {
-        private readonly ApplicationDbContext _context;
-        private readonly IConfiguration _configuration;
-        public UserController(ApplicationDbContext context, IConfiguration configuration)
+        private readonly IUserService _userService;
+        private readonly IJwtTokenService _jwtTokenService;
+        private readonly IPasswordHasher _passwordHasher;
+        
+        public UserController(IUserService userService, IJwtTokenService jwtTokenService,
+            IPasswordHasher passwordHasher)
         {
-            _context = context;
-            _configuration = configuration;
+            _userService = userService;
+            _jwtTokenService = jwtTokenService;
+            _passwordHasher = passwordHasher;
         }
 
         [Authorize]
         public async Task<IActionResult> Index()
         {
             var email = User.FindFirst(ClaimTypes.Email)?.Value;
+            if (string.IsNullOrEmpty(email)) return Unauthorized();
 
-            if (string.IsNullOrEmpty(email))
-            {
-                return Unauthorized();
-            }
-
-            var user = await _context.Users.FirstOrDefaultAsync(n => n.Email == email);
-
-            if (user == null)
-            {
-                return RedirectToAction("AllUsers");
-            }
-
-            return View(user);
+            var user = await _userService.GetUserByEmailAsync(email);
+            return user == null ? RedirectToAction("AllUsers") : View(user);
         }
 
         public async Task<IActionResult> AllUsers()
         {
-            List<User> Users = await _context.Users.ToListAsync();
-            return View(Users);
+            var users = await _userService.GetAllUsersAsync();
+            return View(users);
         }
         public async Task<IActionResult> Registration(UserRegistration user)
         {
-            if(user.Email != null && user.Password != null && user.Password == user.RepeatPassword)
-            {
-
-                var u = new User
-                {
-                    Fname = user.Fname,
-                    Lname = user.Lname,
-                    City = user.City,
-                    Email = user.Email,
-                    Phone = user.Phone,
-                    PasswordHash = HashPassword(user.Password)
-                };
-                _context.Users.Add(u);
-                await _context.SaveChangesAsync();
+            if (await _userService.RegisterUserAsync(user))
                 return RedirectToAction("AllUsers");
 
-            }
             return View(user);
         }
 
@@ -72,45 +49,20 @@ namespace SimpleAuthorization.Controllers
         [HttpPost]
         public async Task<IActionResult> Authorization(UserAuthorization user)
         {
-            User? u = await _context.Users.FirstOrDefaultAsync(n => n.Email == user.Login);
+            var existingUser = await _userService.GetUserByEmailAsync(user.Login);
 
-            if (u != null && VerifyPassword(user.Password, u.PasswordHash))
+            if (existingUser != null && _passwordHasher.VerifyPassword(user.Password, existingUser.PasswordHash))
             {
-                var token = GenerateJwtToken(u.Email, "user");
+                var token = _jwtTokenService.GenerateToken(existingUser.Email, "user");
 
                 Response.Cookies.Append("jwt_token", token, new CookieOptions
                 {
                     SameSite = SameSiteMode.Strict,
-                    Expires = DateTime.Now.AddMinutes(Convert.ToDouble(_configuration["JwtSettings:ExpireMinutes"]))
+                    Expires = DateTime.UtcNow.AddMinutes(30)
                 });
-                return RedirectToAction("Index", new { id = u.Id });  
+                return RedirectToAction("Index");
             }
-            else return Unauthorized("Invalid password");
-        }
-
-        public string HashPassword(string password) 
-            => BCrypt.Net.BCrypt.HashPassword(password);
-
-        public bool VerifyPassword(string password, string hashedPassword) 
-            => BCrypt.Net.BCrypt.Verify(password, hashedPassword);
-    
-        public string GenerateJwtToken(string username, string role)
-        {
-            SecurityKey securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"]));
-            SigningCredentials credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
-            Claim[] claims = new[]
-            {
-                new Claim(ClaimTypes.Email, username), // Используем ClaimTypes.Email
-                new Claim(ClaimTypes.Role, role)
-            };
-            var token = new JwtSecurityToken(
-                issuer: _configuration["JwtSettings:Issuer"],
-                audience: _configuration["JwtSettings:Audience"],
-                claims: claims,
-                expires: DateTime.Now.AddMinutes(Convert.ToDouble(_configuration["JwtSettings:ExpireMinutes"])),
-                signingCredentials: credentials
-                );
-            return new JwtSecurityTokenHandler().WriteToken(token);
+            return Unauthorized("Invalid password");
         }
     }
 }
