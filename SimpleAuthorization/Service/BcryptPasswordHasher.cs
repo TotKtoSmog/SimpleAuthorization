@@ -1,4 +1,6 @@
-﻿namespace SimpleAuthorization.Service.Interface
+﻿using SimpleAuthorization.Service.Interface;
+
+namespace SimpleAuthorization.Service
 {
     public class BcryptPasswordHasher : IPasswordHasher
     {
